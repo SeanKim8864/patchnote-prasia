@@ -5,7 +5,6 @@ __pycache__/
 .venv/
 .env
 .codex-reviews/
-data/*.db
 data/*.db-*
 data/vector_index*.json
 data/*.dense.joblib
