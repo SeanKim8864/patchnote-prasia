@@ -163,7 +163,9 @@ def _normalize_question_variants(question: str) -> tuple[str, ...]:
 
 
 def _build_query_plan(question: str, filters: SearchFilters) -> QueryPlan:
-    query_tags = tuple(_query_tags(question))
+    normalized_questions = _normalize_question_variants(question)
+    analysis_question = " ".join(normalized_questions)
+    query_tags = tuple(_query_tags(analysis_question))
     generic_keys = {
         "event",
         "world",
@@ -182,16 +184,16 @@ def _build_query_plan(question: str, filters: SearchFilters) -> QueryPlan:
     )
     preserve_history = (
         filters.topic_type in policy.preserve_history_topics
-        or any(token in question for token in ("언제", "기간", "역대", "모두", "정리", "몇 번"))
+        or any(token in analysis_question for token in ("언제", "기간", "역대", "모두", "정리", "몇 번"))
         or any(tag.preserve_history for tag in query_tags)
     )
     return QueryPlan(
         question=question,
         query_tags=query_tags,
         query_topic_keys=query_topic_keys,
-        event_type_hints=_event_type_hints(question),
+        event_type_hints=_event_type_hints(analysis_question),
         preserve_history=preserve_history,
-        question_tokens=_question_tokens(question),
+        question_tokens=_question_tokens(analysis_question),
     )
 
 

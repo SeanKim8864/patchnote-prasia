@@ -24,3 +24,4 @@ patchnote = "patchnote_prasia.cli:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "--basetemp=./tmp_pytest -p no:cacheprovider"

@@ -162,6 +162,66 @@ def test_spacing_variant_query_matches_compound_term(tmp_path: Path):
     assert any("백색 증표" in hit.chunk_text for hit in result.hits)
 
 
+def test_class_change_compound_query_matches_spaced_event_term(tmp_path: Path):
+    db_path = tmp_path / "quality.db"
+    index_path = tmp_path / "quality.vector.json"
+    _seed_event_history_db(db_path)
+    build_vector_index(db_path=db_path, index_path=index_path)
+    build_dense_index(db_path=db_path, index_path=index_path)
+
+    result = hybrid_search(
+        "클래스체인지 기간 알려줘",
+        db_path=db_path,
+        index_path=index_path,
+        top_k=5,
+    )
+
+    assert result.hits
+    assert result.hits[0].source_type == "event_record"
+    assert result.hits[0].event_type == "class_change"
+
+
+def test_boosting_world_compound_query_matches_spaced_term(tmp_path: Path):
+    db_path = tmp_path / "quality.db"
+    index_path = tmp_path / "quality.vector.json"
+    _seed_event_history_db(db_path)
+    conn = get_connection(db_path)
+    conn.execute(
+        """INSERT INTO patch_notes
+           (id, url, title, published_at, collected_at, plain_text)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (
+            12,
+            "https://example.test/boosting-world-compact",
+            "부스팅 월드 안내",
+            "2025-04-09T06:00:00+09:00",
+            "2026-03-30T00:00:00+09:00",
+            "부스팅 월드 사전 안내와 혜택 설명입니다.",
+        ),
+    )
+    boosting_analyses = analyze_patch_note("부스팅 월드 안내", "부스팅 월드 사전 안내와 혜택 설명입니다.")
+    boosting_chunk_map = replace_chunk_analysis(conn, 12, boosting_analyses)
+    replace_event_records(
+        conn,
+        12,
+        extract_event_records("부스팅 월드 안내", "2025-04-09T06:00:00+09:00", boosting_analyses),
+        boosting_chunk_map,
+    )
+    conn.close()
+    build_vector_index(db_path=db_path, index_path=index_path)
+    build_dense_index(db_path=db_path, index_path=index_path)
+
+    result = hybrid_search(
+        "부스팅월드 혜택 알려줘",
+        db_path=db_path,
+        index_path=index_path,
+        top_k=5,
+    )
+
+    assert result.hits
+    assert any("부스팅 월드" in hit.patch_title or "부스팅 월드" in hit.chunk_text for hit in result.hits)
+
+
 def test_vector_index_uses_process_cache_and_reloads_on_file_change(tmp_path: Path, monkeypatch):
     db_path = tmp_path / "quality.db"
     index_path = tmp_path / "quality.vector.json"

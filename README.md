@@ -67,7 +67,11 @@ uvicorn patchnote_prasia.api:app --reload
 현재 메인 DB에는 `update 104건`, `notice 1218건`, 총 `1322건`이 적재되어 있습니다.
 
 현재 회귀 보호선:
-- `2025년 클래스 체인지 진행 기간 정리해줘` gold query set
+- gold query set
+  - `2025년 클래스 체인지 진행 기간 정리해줘`
+  - `클래스체인지 기간 알려줘`
+  - `백색증표 언제 업데이트 됐어`
+  - `부스팅월드 혜택 알려줘`
 - 캐시 재사용 / 파일 변경 시 cache invalidation 테스트
 - 문서 숫자 / board parity / 최신 run 검증 스크립트
 
