@@ -39,13 +39,15 @@ def run_ingestion(
     *,
     run_type: str = "manual",
     max_items: int | None = None,
+    db_path=None,
+    index_path=None,
 ) -> dict:
     """전체 수집 파이프라인을 실행한다.
 
     Returns:
         실행 결과 요약 dict.
     """
-    conn = get_connection()
+    conn = get_connection(db_path)
     init_db(conn)
 
     run_id = start_run(conn, run_type)
@@ -140,8 +142,8 @@ def run_ingestion(
 
     try:
         if stats["inserted"] > 0 or stats["updated"] > 0:
-            build_vector_index()
-            build_dense_index()
+            build_vector_index(db_path=db_path, index_path=index_path)
+            build_dense_index(db_path=db_path, index_path=index_path)
     except Exception as exc:
         log.error("검색 인덱스 재빌드 실패: %s", exc)
         stats["errors"] += 1

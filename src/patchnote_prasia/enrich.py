@@ -19,8 +19,14 @@ from .vector_index import build_vector_index
 log = logging.getLogger(__name__)
 
 
-def run_enrichment(*, force: bool = False, limit: int | None = None) -> dict[str, int]:
-    conn = get_connection()
+def run_enrichment(
+    *,
+    force: bool = False,
+    limit: int | None = None,
+    db_path=None,
+    index_path=None,
+) -> dict[str, int]:
+    conn = get_connection(db_path)
     init_db(conn)
     rows = list_patch_notes_for_analysis(conn, only_missing=not force, limit=limit)
     processed = 0
@@ -42,6 +48,6 @@ def run_enrichment(*, force: bool = False, limit: int | None = None) -> dict[str
 
     conn.close()
     if processed > 0 or force:
-        build_vector_index()
-        build_dense_index()
+        build_vector_index(db_path=db_path, index_path=index_path)
+        build_dense_index(db_path=db_path, index_path=index_path)
     return {"processed": processed}

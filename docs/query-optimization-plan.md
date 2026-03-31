@@ -20,8 +20,12 @@
    - 파일 시그니처가 바뀌면 자동으로 새로 로드한다.
 2. query plan 1회 계산
    - query tag, topic key, preserve-history 여부, question token을 한 번만 계산한다.
-3. quality regression
-   - 캐시 도입 후에도 gold query set 결과가 바뀌지 않아야 한다.
+3. 질의 정규화 확장
+   - 한국어 게임 용어의 붙여쓰기/띄어쓰기 변형을 자동 생성해 함께 검색한다.
+   - 예: `백색증표` ↔ `백색 증표`, `클래스체인지` ↔ `클래스 체인지`
+   - 원문 질의와 정규화 후보 질의 결과를 병합 재랭킹한다.
+4. quality regression
+   - 캐시/정규화 도입 후에도 gold query set 결과가 바뀌지 않아야 한다.
 
 ## Deferred Until Recall Guard Expands
 - 후보를 공격적으로 줄이는 SQL 1차 retrieval

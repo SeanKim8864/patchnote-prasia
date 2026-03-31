@@ -126,6 +126,42 @@ def test_query_analysis_runs_once_per_search(tmp_path: Path, monkeypatch):
     assert calls["count"] == 1
 
 
+def test_spacing_variant_query_matches_compound_term(tmp_path: Path):
+    db_path = tmp_path / "quality.db"
+    index_path = tmp_path / "quality.vector.json"
+    _seed_event_history_db(db_path)
+    conn = get_connection(db_path)
+    conn.execute(
+        """INSERT INTO patch_notes
+           (id, url, title, published_at, collected_at, plain_text)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (
+            10,
+            "https://example.test/white-token-20250325",
+            "3/25 패치노트",
+            "2025-03-25T06:00:00+09:00",
+            "2026-03-30T00:00:00+09:00",
+            "백색 증표 획득처와 교환처가 추가되었습니다.",
+        ),
+    )
+    analyses = analyze_patch_note("3/25 패치노트", "백색 증표 획득처와 교환처가 추가되었습니다.")
+    chunk_id_map = replace_chunk_analysis(conn, 10, analyses)
+    replace_event_records(conn, 10, extract_event_records("3/25 패치노트", "2025-03-25T06:00:00+09:00", analyses), chunk_id_map)
+    conn.close()
+    build_vector_index(db_path=db_path, index_path=index_path)
+    build_dense_index(db_path=db_path, index_path=index_path)
+
+    result = hybrid_search(
+        "백색증표 언제 업데이트 됐어",
+        db_path=db_path,
+        index_path=index_path,
+        top_k=5,
+    )
+
+    assert result.hits
+    assert any("백색 증표" in hit.chunk_text for hit in result.hits)
+
+
 def test_vector_index_uses_process_cache_and_reloads_on_file_change(tmp_path: Path, monkeypatch):
     db_path = tmp_path / "quality.db"
     index_path = tmp_path / "quality.vector.json"

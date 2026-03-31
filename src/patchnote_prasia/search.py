@@ -96,31 +96,6 @@ def _query_tags(question: str):
     return classify_text(question, None, question)
 
 
-def _query_topic_keys(question: str) -> tuple[str, ...]:
-    generic_keys = {
-        "event",
-        "world",
-        "balance",
-        "maintenance",
-        "item",
-        "content",
-        "system",
-    }
-    keys = []
-    for tag in _query_tags(question):
-        if tag.topic_key and tag.topic_key not in generic_keys:
-            keys.append(tag.topic_key)
-    return tuple(dict.fromkeys(keys))
-
-
-def _is_preserve_history(question: str, filters: SearchFilters) -> bool:
-    if filters.topic_type in policy.preserve_history_topics:
-        return True
-    if any(token in question for token in ("언제", "기간", "역대", "모두", "정리", "몇 번")):
-        return True
-    return any(tag.preserve_history for tag in _query_tags(question))
-
-
 def _rerank_weights(policy_applied: str) -> dict[str, float]:
     if policy_applied == "preserve_history":
         return {"similarity": 0.35, "recency": 0.1, "policy": 0.3, "structured": 0.25}
@@ -167,6 +142,24 @@ def _event_type_hints(question: str) -> tuple[str, ...]:
 
 def _question_tokens(question: str) -> frozenset[str]:
     return frozenset(re.findall(r"[가-힣A-Za-z0-9]+", question.lower()))
+
+
+QUERY_NORMALIZATION_MAP: tuple[tuple[str, str], ...] = (
+    ("백색증표", "백색 증표"),
+    ("클래스체인지", "클래스 체인지"),
+    ("부스팅월드", "부스팅 월드"),
+)
+
+
+def _normalize_question_variants(question: str) -> tuple[str, ...]:
+    variants = [question]
+    normalized = question
+    for compact, spaced in QUERY_NORMALIZATION_MAP:
+        if compact in normalized and spaced not in normalized:
+            variants.append(normalized.replace(compact, spaced))
+        if spaced in normalized and compact not in normalized:
+            variants.append(normalized.replace(spaced, compact))
+    return tuple(dict.fromkeys(part.strip() for part in variants if part.strip()))
 
 
 def _build_query_plan(question: str, filters: SearchFilters) -> QueryPlan:
@@ -282,6 +275,7 @@ def hybrid_search(
 
     total_hits = len(chunk_rows) + len(event_rows)
     query_plan = _build_query_plan(question, filters)
+    question_variants = _normalize_question_variants(question)
     policy_applied = "preserve_history" if query_plan.preserve_history else "prefer_latest"
     weights = _rerank_weights(policy_applied)
 
@@ -293,16 +287,23 @@ def hybrid_search(
         dense_index = build_dense_index(db_path=db_path, index_path=index_path)
 
     candidate_ids = {int(row["chunk_id"]) for row in chunk_rows}
-    sparse_scores = index.search(
-        question,
-        candidate_ids=candidate_ids,
-        top_k=query.hybrid_candidates,
-    )
-    dense_scores = dense_index.search(
-        question,
-        candidate_ids=candidate_ids,
-        top_k=query.hybrid_candidates,
-    )
+    sparse_scores: dict[int, float] = {}
+    dense_scores: dict[int, float] = {}
+    for question_variant in question_variants:
+        variant_sparse = index.search(
+            question_variant,
+            candidate_ids=candidate_ids,
+            top_k=query.hybrid_candidates,
+        )
+        variant_dense = dense_index.search(
+            question_variant,
+            candidate_ids=candidate_ids,
+            top_k=query.hybrid_candidates,
+        )
+        for chunk_id, score in variant_sparse.items():
+            sparse_scores[chunk_id] = max(sparse_scores.get(chunk_id, 0.0), score)
+        for chunk_id, score in variant_dense.items():
+            dense_scores[chunk_id] = max(dense_scores.get(chunk_id, 0.0), score)
     vector_scores = {
         chunk_id: sparse_scores.get(chunk_id, 0.0) * 0.55 + dense_scores.get(chunk_id, 0.0) * 0.45
         for chunk_id in set(sparse_scores) | set(dense_scores)
