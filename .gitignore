@@ -6,7 +6,5 @@ __pycache__/
 .env
 .codex-reviews/
 data/*.db-*
-data/vector_index*.json
-data/*.dense.joblib
 tmp_review_dense/
 tmp_review_dense2/
