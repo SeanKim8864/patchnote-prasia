@@ -92,11 +92,11 @@ def _parse_datetime_token(
 
 def _extract_period(text: str, *, reference_year: int) -> tuple[str | None, str | None, str | None]:
     raw = None
-    for label in ("진행 기간", "이벤트 기간", "운영 기간", "기간"):
+    for label in ("진행 기간", "이벤트 기간", "운영 기간", "진행 일정\n", "기간"):
         raw = _extract_block(
             text,
             label,
-            ("대상", "진행 렐름", "진행 렐름", "계정당", "기타", "클래스", "임무"),
+            ("대상", "진행 렐름", "진행 월드", "계정당", "기타", "클래스", "임무"),
         )
         if raw:
             break
@@ -189,7 +189,7 @@ def _first_sentence(text: str) -> str:
 def _event_type(text: str, tags: tuple[str, ...]) -> str | None:
     if "클래스 체인지 리턴" in text:
         return "class_change_return"
-    if "클래스 체인지" in text and any(key in text for key in ("진행 기간", "계정당", "골드 클래스 체인지")):
+    if "클래스 체인지" in text and any(key in text for key in ("진행 기간", "진행 일정", "계정당", "골드 클래스 체인지")):
         return "class_change"
     if "출석" in text and "기간" in text:
         return "attendance_event"
