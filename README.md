@@ -21,6 +21,12 @@
   - 기본 `prefer_latest`
   - 이벤트/클래스/월드 오픈 계열 `preserve_history`
   - 이벤트성 history 질의에서 `event_record` 우선 정렬
+- 게임 도메인 동의어 사전(`data/synonyms.json`) 기반 질의 정규화
+- 점검 유형(긴급/임시/정기) 분류 및 `maintenance_subtype` 필터링
+- `festival_event`(제전) 이벤트 타입 추가 → 이벤트/제전 분리 처리
+- 공지 파싱 경고 플래그(`parse_flags`) 기록 (`update_format`, `reward_missing`)
+- 알려진 월드명(메르비스 등) 기반 `world_open` 보강 태깅
+- 점검 기간 파싱 강화 ("점검 후/이후 ~ 점검 전", 전각 물결 ～)
 - CLI와 FastAPI `POST /query`, `GET /query/debug`
 - 수집 후 인덱스 자동 재빌드
 - 변경 범위 중심 검증 스크립트
@@ -35,6 +41,7 @@
 - `docs/review-workflow.md` — 변경 범위 중심 검증 절차
 - `docs/query-optimization-plan.md` — 검색 최적화 기준과 정확도 보호선
 - `docs/team-start-here.md` — 팀원용 빠른 시작 문서
+- `data/synonyms.json` — 게임 도메인 동의어 사전
 
 ## 핵심 데이터 계층
 - `patch_notes`: 원문, 메타데이터
@@ -53,6 +60,7 @@
 ```bash
 py -3 -m patchnote_prasia.cli status
 py -3 -m patchnote_prasia.cli enrich --force
+py -3 -m patchnote_prasia.cli refresh-synonyms
 py -3 -m patchnote_prasia.cli search "클래스 체인지 진행 기간 알려줘"
 uvicorn patchnote_prasia.api:app --reload
 ```
@@ -73,10 +81,10 @@ uvicorn patchnote_prasia.api:app --reload
 
 ## 남은 작업
 1. 검색 응답 문장 품질 고도화
-2. 이벤트 슬롯 추출 정밀도 개선
-3. 2단계 retrieval 전환
-4. 수요일 스케줄러/배치 자동화
-5. 필요 시 OpenAI 또는 sentence-transformers 계열 dense backend 확장
+2. 2단계 retrieval 전환
+3. 수요일 스케줄러/배치 자동화
+4. 필요 시 OpenAI 또는 sentence-transformers 계열 dense backend 확장
+5. 동의어 사전 자동 갱신 파이프라인 (Google Sheets → `synonyms.json`)
 
 ## 과하게 만들지 않기
 초기 버전에서는 아래는 미뤄도 된다.
