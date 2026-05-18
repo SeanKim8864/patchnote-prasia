@@ -1,8 +1,8 @@
 # 프라시아 전기 패치노트 프로젝트 HANDOFF
 
-> **문서 버전**: v0.4
-> **최종 수정**: 2026-03-30
-> **변경 이력**: v0.1 초안 작성 / v0.2 토픽 분류표·API 스펙·재랭킹·에러 전략·크롤링 제약 추가 / v0.3 구현 현행화 / v0.4 멀티보드 적재, 검증 스크립트, 정확도 가드, 안전 최적화 반영
+> **문서 버전**: v0.5
+> **최종 수정**: 2026-05-18
+> **변경 이력**: v0.1 초안 작성 / v0.2 토픽 분류표·API 스펙·재랭킹·에러 전략·크롤링 제약 추가 / v0.3 구현 현행화 / v0.4 멀티보드 적재, 검증 스크립트, 정확도 가드, 안전 최적화 반영 / v0.5 1주차 실습 피드백 반영 (날짜 파싱, 공지 파싱 예외, 점검 유형 분류, 이벤트/제전 구분, 동의어 사전, 메르비스 월드)
 
 ## 현재 상태
 - 프로젝트 목적: 프라시아 전기 공식 `업데이트`/`공지사항` 페이지(`https://wp.nexon.com/news/update`, `https://wp.nexon.com/news/notice`)를 수집해 이력을 저장하고, 자연어 질의에 대해 정확도 높은 답변을 제공.
@@ -188,13 +188,64 @@
 - `season_event`
 - `world_open_event`
 
+## 1주차 실습 피드백 반영 결과 (2026-05-18, v0.5)
+
+### ✅ P1 완료
+
+**Issue #2 — 이벤트 날짜 파싱 로직 수정**
+- `events.py` `_parse_datetime_token`: "점검 이후" 패턴을 "점검 후"와 동일하게 처리
+- `events.py` `MAINTENANCE_PERIOD_PATTERN` 추가: "N월 M일(요일) 점검 후/이후 ~ N월 M일(요일) 점검 전" 형태를 기간 레이블 없이도 파싱
+- `events.py` `_extract_period`: 전각 물결(～, 〜)도 구분자로 처리하는 fallback 추가
+- 효과: `event_records.start_at / end_at` NULL 발생 케이스 대폭 감소
+
+**Issue #13 — 공지 파싱 예외 처리 추가**
+- `db.py` `init_db`: `patch_notes.parse_flags TEXT` 컬럼 마이그레이션 추가
+- `storage.py` `save_parse_flags()`: 파싱 경고 플래그를 DB에 기록하는 함수 추가
+- `enrich.py` `_detect_parse_warnings()`: 파싱 결과 검사 후 경고 플래그 탐지
+  - "기존 공지 업데이트" 형식 감지 → `⚠️ update_format` 플래그
+  - 보상/기간 키워드 있는데 event_record 없음 → `⚠️ reward_missing` 플래그
+- `enrich.py` `run_enrichment()`: 경고 시 로그 출력 + DB 기록
+
+### ✅ P2 완료
+
+**Issue #6 — 점검 유형 분류 기준 추가**
+- `analyze.py` `MAINTENANCE_TYPE_RULES`: 긴급/임시/정기 점검 분류 규칙 정의
+- `analyze.py` `_classify_maintenance_type()`: 텍스트에서 점검 유형 판별
+- `analyze.py` `classify_text()`: maintenance 태그의 `topic_key`와 `tag_value`에 서브타입(긴급/임시/정기/일반) 저장
+- `search/__init__.py` `_detect_maintenance_subtype()` / `QueryPlan.maintenance_subtype`: 질문에 명시된 점검 유형 추출
+- `search/__init__.py`: `maintenance_subtype` 필터로 후보 청크 서브타입 필터링 → 유형 혼입 차단
+
+**Issue #7 — 이벤트/제전 카테고리 분류 체계 정비**
+- `analyze.py` `EVENT_TOPIC_RULES`: `festival_event` 타입 추가 ("제전" 키워드 기준)
+- `analyze.py` `HISTORY_TOPIC_TYPES`: `festival_event` 포함
+- `events.py` `_event_type()`: "제전" + "기간" 조합을 `festival_event`로 분류
+- `search/__init__.py`: `EVENT_TOPIC_TYPES`, `_event_type_hints()`에 `festival_event` 추가
+- 효과: 감사제 이벤트 vs 감사제 제전이 별도 레코드로 처리됨
+
+**Issue #10 — 게임 도메인 동의어 사전 연동**
+- `data/synonyms.json`: 초기 사전 파일 생성 (부스트업/확률업, 랠리토벌/보스추적, WPC, 클체 등)
+  - 공식 소스: https://docs.google.com/spreadsheets/d/1IwE2SByKEhR7QUbOOPGLsFgQcknYAbNxoEM8vdV0HOc
+- `src/patchnote_prasia/synonyms.py`: 사전 로더 + `normalize_query()` + `expand_query_variants()` 구현
+- `search/__init__.py`: `hybrid_search()` 진입부에서 `normalize_query()` 호출
+- `cli.py`: `refresh-synonyms` 커맨드 추가 (수동 사전 갱신용)
+
+### ✅ P3 완료
+
+**Issue #5 — 메르비스 월드 누락 데이터 보완**
+- `analyze.py` `KNOWN_WORLD_NAMES`: 메르비스 포함 알려진 월드명 명시 목록 추가
+- `analyze.py` `_extract_world_open_keys()`: 알려진 월드명이 컨텍스트에 등장하면 정규식 미매치 시에도 world_open 태깅
+- **DB 보완 방법**: 2025년 7월 패치노트가 이미 수집된 경우 `py -3 -m patchnote_prasia.cli enrich --force`로 재처리. 미수집 시 `py -3 -m patchnote_prasia.cli ingest` 후 enrich 실행.
+
+---
+
 ## 현재 남은 다음 단계
-1. 이벤트 슬롯 추출 정확도 보정
+1. ~~이벤트 슬롯 추출 정확도 보정~~ ✅ 완료 (v0.5)
 2. 답변 생성층 고도화
 3. 2단계 retrieval 전환
 4. 배치 스케줄링/운영 자동화
 5. dense backend 확장 옵션 추가
-6. 질의 정규화 강화 (붙여쓰기/띄어쓰기 변형, 동의어 사전)
+6. ~~질의 정규화 강화 (붙여쓰기/띄어쓰기 변형, 동의어 사전)~~ ✅ 완료 (v0.5)
+7. 동의어 사전 자동 갱신 파이프라인 (Google Sheets → synonyms.json 자동화)
 
 ## 팀 작업 시작 전 권장 읽기 순서
 1. `docs/team-start-here.md`
